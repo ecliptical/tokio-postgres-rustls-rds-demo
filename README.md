@@ -19,7 +19,7 @@ You'll need to modify a database engine parameter, which means you need a custom
 
 ### Database Instance
 
-Now fow the actual database instance:
+Now for the actual database instance:
 
 1. In the _Databases_ tab, click _Create database_
 2. Choose _Standard Create_ and pick the _PostgreSQL_ engine type
@@ -37,7 +37,7 @@ Unless you previously set up and configured your Security Group, the default one
 1. Open the details of your newly created database instance
 2. In the _Connectivity and security_ tab, _Security_ section, click the first (active) security group under _VPC security groups_ (it should be named something like `default (sg-0123abcd)`).
 3. Open its _Inbound rules_ tab and click _Edit inbound rules_
-4. Ensure your laptop has access to TCP port 5432; e.g., add your public IP address as the _Source_ for a _PostgreSQL_ type rule. *BE CAUTIOUS* -- this has implications on the security of your newly created database instance and any other AWS assets that may be protected by this security group!
+4. Ensure your development machine has access to TCP port 5432; e.g., add your public IP address as the _Source_ for a _PostgreSQL_ type rule. *BE CAUTIOUS* -- this has implications on the security of your newly created database instance and any other AWS assets that may be protected by this security group!
 
 ## Testing Connectivity
 
@@ -46,10 +46,12 @@ Once your new database instance becomes available, find its public hostname:
 1. Open its details
 2. In the _Connectivity and security_ tab, _Endpoint & port_ section, copy the _Endpoint_ value (i.e., its fully-qualified domain name). It should look something like `database-1.xq7f5vzbpq1x.ca-central-1.rds.amazonaws.com`.
 
+> In the examples that follow, please substitute the PG.HOST parameter value with your own database instance hostname.
+
 By default, the RDS instance you created allows both secure and insecure connections. To test that you can access the database without the use of TLS:
 
 ```bash
-env PG.DBNAME=postgres PG.HOST=<your database hostname> PG.USER=postgres PG.PASSWORD=<your database password> RUST_LOG=debug cargo run
+env PG.DBNAME=postgres PG.HOST=database-1.xq7f5vzbpq1x.ca-central-1.rds.amazonaws.com PG.USER=postgres PG.PASSWORD=xxxxxxxx RUST_LOG=debug cargo run
 ```
 
 You should see output similar to:
@@ -68,7 +70,7 @@ You should see output similar to:
 To connect using TLS, add the `DB_CA_CERT` parameter with the path to the RDS CA certificate:
 
 ```bash
-env PG.DBNAME=postgres PG.HOST=<your database hostname> PG.USER=postgres PG.PASSWORD=<your database password> DB_CA_CERT=ca-certificates/rds-ca-2019-root.pem RUST_LOG=debug cargo run
+env PG.DBNAME=postgres PG.HOST=database-1.xq7f5vzbpq1x.ca-central-1.rds.amazonaws.com PG.USER=postgres PG.PASSWORD=xxxxxxxx DB_CA_CERT=ca-certificates/rds-ca-2019-root.pem RUST_LOG=debug cargo run
 ```
 
 You should see output similar to:
@@ -106,7 +108,7 @@ To further ensure that only TLS connections are allowed, change your _DB paramet
 Once the changes have been applied, you will no longer be able to connect without specifying the `DB_CA_CERT` argument:
 
 ```bash
-env PG.DBNAME=postgres PG.HOST=<your database hostname> PG.USER=postgres PG.PASSWORD=<your database password> RUST_LOG=debug cargo run
+env PG.DBNAME=postgres PG.HOST=database-1.xq7f5vzbpq1x.ca-central-1.rds.amazonaws.com PG.USER=postgres PG.PASSWORD=xxxxxxxx RUST_LOG=debug cargo run
 ```
 
 Output:
