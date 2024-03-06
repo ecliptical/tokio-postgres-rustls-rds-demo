@@ -1,7 +1,3 @@
-edition = "2018"
-imports_layout = "Vertical"
-merge_imports = true
+edition = "2021"
 reorder_imports = true
 reorder_modules = true
-#report_fixme = "Always"
-#report_todo = "Always"

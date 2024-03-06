@@ -1,21 +1,10 @@
-use config::{
-    Config,
-    Environment,
-};
-
-use deadpool_postgres::{
-    Config as PoolConfig,
-    Pool,
-};
-
+use anyhow::Result;
+use config::{Config, Environment};
+use deadpool_postgres::{Config as PoolConfig, Pool, Runtime};
 use log::*;
 use rustls::ClientConfig as RustlsClientConfig;
 use serde::Deserialize;
-use std::{
-    fs::File,
-    io::BufReader,
-};
-
+use std::{fs::File, io::BufReader};
 use tokio_postgres::NoTls;
 use tokio_postgres_rustls::MakeRustlsConnect;
 
@@ -26,7 +15,7 @@ struct Settings {
 }
 
 #[tokio::main]
-async fn run(pool: Pool) -> Result<(), Box<dyn std::error::Error>> {
+async fn run(pool: Pool) -> Result<()> {
     let client = pool.get().await?;
     let stmt = client
         .prepare("SELECT * FROM information_schema.information_schema_catalog_name")
@@ -41,28 +30,33 @@ async fn run(pool: Pool) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<()> {
     pretty_env_logger::init();
 
-    let mut config = Config::new();
-    config.merge(Environment::new())?;
+    let config = Config::builder()
+        .add_source(Environment::default())
+        .build()?;
 
-    let settings: Settings = config.try_into()?;
+    let settings: Settings = config.try_deserialize()?;
 
     debug!("settings: {:?}", settings);
 
     let pool = if let Some(ca_cert) = settings.db_ca_cert {
-        let mut tls_config = RustlsClientConfig::new();
-        let cert_file = File::open(&ca_cert)?;
+        let cert_file = File::open(ca_cert)?;
         let mut buf = BufReader::new(cert_file);
-        tls_config.root_store.add_pem_file(&mut buf).map_err(|_| {
-            anyhow::anyhow!("failed to read database root certificate: {}", ca_cert)
-        })?;
+        let mut root_store = rustls::RootCertStore::empty();
+        for cert in rustls_pemfile::certs(&mut buf) {
+            root_store.add(cert?)?;
+        }
+
+        let tls_config = RustlsClientConfig::builder()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
 
         let tls = MakeRustlsConnect::new(tls_config);
-        settings.pg.create_pool(tls)?
+        settings.pg.create_pool(Some(Runtime::Tokio1), tls)?
     } else {
-        settings.pg.create_pool(NoTls)?
+        settings.pg.create_pool(Some(Runtime::Tokio1), NoTls)?
     };
 
     run(pool)
