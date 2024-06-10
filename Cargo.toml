@@ -8,7 +8,7 @@ rust-version = "1.75"
 [dependencies]
 anyhow = "1"
 config = "0.14"
-deadpool-postgres = { version = "0.13", features = ["serde"] }
+deadpool-postgres = { version = "0.14", features = ["serde"] }
 log = "0.4"
 pretty_env_logger = "0.5"
 rustls = "0.23"
