@@ -1,8 +1,20 @@
 on:
   pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'Cargo.*'
+      - '.rustfmt.toml'
+      - '.github/workflows/ci.yaml'
   push:
     branches:
       - main
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'Cargo.*'
+      - '.rustfmt.toml'
+      - '.github/workflows/ci.yaml'
 
 name: Rust CI
 
@@ -12,9 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Cache tools
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           key: ${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
           path: |
@@ -25,7 +37,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: rustfmt, clippy, llvm-tools
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Run clippy
@@ -36,9 +48,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Cache tools
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           key: ${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
           path: |
@@ -48,35 +60,16 @@ jobs:
             ~/.cargo/git/db/
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: Build the binary
-        run: cargo build
-        env:
-          CARGO_INCREMENTAL: '0'
-          RUSTC_BOOTSTRAP: '1'
-          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
-          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
+        with:
+          components: rustfmt, clippy, llvm-tools
       - name: Run unit tests
         run: cargo test
         env:
-          CARGO_INCREMENTAL: '0'
-          RUSTC_BOOTSTRAP: '1'
-          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
-          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
-      - name: Install grcov
-        run: |
-            if [ ! -x  ~/.cargo/bin/grcov ]
-            then
-                wget -O /tmp/grcov.tar.bz2 https://github.com/mozilla/grcov/releases/download/v0.8.19/grcov-x86_64-unknown-linux-gnu.tar.bz2
-                tar xjf /tmp/grcov.tar.bz2
-                chmod +x grcov
-                mv grcov ~/.cargo/bin/
-            fi
-      - name: Run grcov
-        run: grcov . -s . --binary-path ./target/debug/ --excl-start '^mod\s+tests\s*\{$' -t covdir --branch --ignore-not-existing --keep-only 'src/**' -o ./target/covdir.json
+          RUSTFLAGS: '-Cinstrument-coverage'
+          LLVM_PROFILE_FILE: 'target/coverage/%p-%m.profraw'
       - name: Generate coverage report
-        uses: ecliptical/covdir-report-action@v0.2
+        uses: ./
         with:
-          file: ./target/covdir.json
           summary: 'true'
           out: ./target/coverage.md
       - name: Add coverage comment to the pull request

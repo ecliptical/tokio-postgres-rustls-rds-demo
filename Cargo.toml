@@ -1,13 +1,13 @@
 [package]
 name = "tokio-postgres-rustls-rds-demo"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Peter Nehrer <pnehrer@eclipticalsoftware.com>"]
-edition = "2021"
-rust-version = "1.75"
+edition = "2024"
+rust-version = "1.85.1"
 
 [dependencies]
 anyhow = "1"
-config = "0.14"
+config = "0.15"
 deadpool-postgres = { version = "0.14", features = ["serde"] }
 log = "0.4"
 pretty_env_logger = "0.5"
