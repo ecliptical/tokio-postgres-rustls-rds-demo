@@ -31,8 +31,15 @@ jobs:
           echo "url=$(echo "$pr" | jq -r '.html_url')" >> "$GITHUB_OUTPUT"
 
           # Dependabot embeds a YAML block in the commit message with update-type
-          # for each dependency. Qualify if every dep is patch or minor (none major).
+          # and package-ecosystem for each dependency. Only auto-merge Cargo updates
+          # (GitHub Actions bumps share the same format but are excluded).
+          # Qualify if every dep is patch or minor (none major).
           commit_msg=$(gh api "repos/$REPO/git/commits/$SHA" --jq '.message')
+          if ! echo "$commit_msg" | grep -q 'package-ecosystem: cargo'; then
+            echo "Not a Cargo update — skipping"
+            echo "is_eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           major=$(echo "$commit_msg" \
             | grep 'update-type:' \
             | grep 'version-update:semver-major' \
