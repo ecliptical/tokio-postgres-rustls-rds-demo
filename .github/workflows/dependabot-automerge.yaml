@@ -1,8 +1,9 @@
 name: Dependabot Auto-Merge
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  workflow_run:
+    workflows: [Rust CI]
+    types: [completed]
 
 permissions:
   contents: write
@@ -11,33 +12,52 @@ permissions:
 jobs:
   dependabot-auto-merge:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]'
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - name: Find open PR and check update type
+        id: check
+        run: |
+          pr=$(gh api "repos/$REPO/pulls" \
+            --jq "[.[] | select(.head.sha == \"$SHA\" and .state == \"open\")] | first")
+          number=$(echo "$pr" | jq -r '.number // empty')
+          if [[ -z "$number" ]]; then
+            echo "No open PR found for SHA $SHA — skipping"
+            exit 0
+          fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          echo "url=$(echo "$pr" | jq -r '.html_url')" >> "$GITHUB_OUTPUT"
 
-      - name: Get Dependabot metadata
-        id: metadata
-        uses: dependabot/fetch-metadata@v3
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Auto-approve patch and minor updates for Cargo
-        if: |
-          steps.metadata.outputs.package-ecosystem == 'cargo' &&
-          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-           steps.metadata.outputs.update-type == 'version-update:semver-minor')
-        run: gh pr review --approve "$PR_URL"
+          # Dependabot embeds a YAML block in the commit message with update-type
+          # and package-ecosystem for each dependency. Only auto-merge Cargo updates
+          # (GitHub Actions bumps share the same format but are excluded).
+          # Qualify if every dep is patch or minor (none major).
+          commit_msg=$(gh api "repos/$REPO/git/commits/$SHA" --jq '.message')
+          if ! echo "$commit_msg" | grep -q 'package-ecosystem: cargo'; then
+            echo "Not a Cargo update — skipping"
+            echo "is_eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          major=$(echo "$commit_msg" \
+            | grep 'update-type:' \
+            | grep 'version-update:semver-major' \
+            || true)
+          has_types=$(echo "$commit_msg" | grep -c 'update-type:' || true)
+          if [[ -z "$major" && "$has_types" -gt 0 ]]; then
+            echo "is_eligible=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_eligible=false" >> "$GITHUB_OUTPUT"
+          fi
         env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Enable auto-merge for patch and minor Cargo updates
-        if: |
-          steps.metadata.outputs.package-ecosystem == 'cargo' &&
-          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-           steps.metadata.outputs.update-type == 'version-update:semver-minor')
-        run: gh pr merge --auto --squash "$PR_URL"
+      - name: Merge patch and minor updates
+        if: steps.check.outputs.number != '' && steps.check.outputs.is_eligible == 'true'
+        run: gh pr merge --squash "$PR_URL"
         env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_URL: ${{ steps.check.outputs.url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
